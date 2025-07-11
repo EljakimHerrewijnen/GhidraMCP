@@ -192,7 +192,7 @@ public class GhidraMCPPlugin extends Plugin {
         });
 
         // New API endpoints based on requirements
-        
+
         server.createContext("/get_function_by_address", exchange -> {
             Map<String, String> qparams = parseQueryParams(exchange);
             String address = qparams.get("address");
@@ -341,6 +341,13 @@ public class GhidraMCPPlugin extends Plugin {
             sendResponse(exchange, listDefinedStrings(offset, limit, filter));
         });
 
+        server.createContext("/memory", exchange -> {
+            Map<String, String> qparams = parseQueryParams(exchange);
+            String address = qparams.get("address");
+            int size = parseIntOrDefault(qparams.get("size"), 100);
+            sendResponse(exchange, readMemory(address, size));
+        });
+
         server.setExecutor(null);
         new Thread(() -> {
             try {
@@ -468,7 +475,7 @@ public class GhidraMCPPlugin extends Plugin {
         Program program = getCurrentProgram();
         if (program == null) return "No program loaded";
         if (searchTerm == null || searchTerm.isEmpty()) return "Search term is required";
-    
+
         List<String> matches = new ArrayList<>();
         for (Function func : program.getFunctionManager().getFunctions(true)) {
             String name = func.getName();
@@ -477,14 +484,14 @@ public class GhidraMCPPlugin extends Plugin {
                 matches.add(String.format("%s @ %s", name, func.getEntryPoint()));
             }
         }
-    
+
         Collections.sort(matches);
-    
+
         if (matches.isEmpty()) {
             return "No functions matching '" + searchTerm + "'";
         }
         return paginateList(matches, offset, limit);
-    }    
+    }
 
     // ----------------------------------------------------------------------------------
     // Logic for rename, decompile, etc.
@@ -613,7 +620,7 @@ public class GhidraMCPPlugin extends Plugin {
         while (symbols.hasNext()) {
             HighSymbol symbol = symbols.next();
             String symbolName = symbol.getName();
-            
+
             if (symbolName.equals(oldVarName)) {
                 highSymbol = symbol;
             }
@@ -633,7 +640,7 @@ public class GhidraMCPPlugin extends Plugin {
         AtomicBoolean successFlag = new AtomicBoolean(false);
 
         try {
-            SwingUtilities.invokeAndWait(() -> {           
+            SwingUtilities.invokeAndWait(() -> {
                 int tx = program.startTransaction("Rename variable");
                 try {
                     if (commitRequired) {
@@ -771,8 +778,8 @@ public class GhidraMCPPlugin extends Plugin {
 
         StringBuilder result = new StringBuilder();
         for (Function func : program.getFunctionManager().getFunctions(true)) {
-            result.append(String.format("%s at %s\n", 
-                func.getName(), 
+            result.append(String.format("%s at %s\n",
+                func.getName(),
                 func.getEntryPoint()));
         }
 
@@ -808,8 +815,8 @@ public class GhidraMCPPlugin extends Plugin {
             decomp.openProgram(program);
             DecompileResults result = decomp.decompileFunction(func, 30, new ConsoleTaskMonitor());
 
-            return (result != null && result.decompileCompleted()) 
-                ? result.getDecompiledFunction().getC() 
+            return (result != null && result.decompileCompleted())
+                ? result.getDecompiledFunction().getC()
                 : "Decompilation failed";
         } catch (Exception e) {
             return "Error decompiling function: " + e.getMessage();
@@ -843,8 +850,8 @@ public class GhidraMCPPlugin extends Plugin {
                 String comment = listing.getComment(CodeUnit.EOL_COMMENT, instr.getAddress());
                 comment = (comment != null) ? "; " + comment : "";
 
-                result.append(String.format("%s: %s %s\n", 
-                    instr.getAddress(), 
+                result.append(String.format("%s: %s %s\n",
+                    instr.getAddress(),
                     instr.toString(),
                     comment));
             }
@@ -853,7 +860,7 @@ public class GhidraMCPPlugin extends Plugin {
         } catch (Exception e) {
             return "Error disassembling function: " + e.getMessage();
         }
-    }    
+    }
 
     /**
      * Set a comment using the specified comment type (PRE_COMMENT or EOL_COMMENT)
@@ -926,7 +933,7 @@ public class GhidraMCPPlugin extends Plugin {
     private boolean renameFunctionByAddress(String functionAddrStr, String newName) {
         Program program = getCurrentProgram();
         if (program == null) return false;
-        if (functionAddrStr == null || functionAddrStr.isEmpty() || 
+        if (functionAddrStr == null || functionAddrStr.isEmpty() ||
             newName == null || newName.isEmpty()) {
             return false;
         }
@@ -985,7 +992,7 @@ public class GhidraMCPPlugin extends Plugin {
         final AtomicBoolean success = new AtomicBoolean(false);
 
         try {
-            SwingUtilities.invokeAndWait(() -> 
+            SwingUtilities.invokeAndWait(() ->
                 applyFunctionPrototype(program, functionAddrStr, prototype, success, errorMessage));
         } catch (InterruptedException | InvocationTargetException e) {
             String msg = "Failed to set function prototype on Swing thread: " + e.getMessage();
@@ -999,7 +1006,7 @@ public class GhidraMCPPlugin extends Plugin {
     /**
      * Helper method that applies the function prototype within a transaction
      */
-    private void applyFunctionPrototype(Program program, String functionAddrStr, String prototype, 
+    private void applyFunctionPrototype(Program program, String functionAddrStr, String prototype,
                                        AtomicBoolean success, StringBuilder errorMessage) {
         try {
             // Get the address and function
@@ -1035,8 +1042,8 @@ public class GhidraMCPPlugin extends Plugin {
         int txComment = program.startTransaction("Add prototype comment");
         try {
             program.getListing().setComment(
-                func.getEntryPoint(), 
-                CodeUnit.PLATE_COMMENT, 
+                func.getEntryPoint(),
+                CodeUnit.PLATE_COMMENT,
                 "Setting prototype: " + prototype
             );
         } finally {
@@ -1056,11 +1063,11 @@ public class GhidraMCPPlugin extends Plugin {
             DataTypeManager dtm = program.getDataTypeManager();
 
             // Get data type manager service
-            ghidra.app.services.DataTypeManagerService dtms = 
+            ghidra.app.services.DataTypeManagerService dtms =
                 tool.getService(ghidra.app.services.DataTypeManagerService.class);
 
             // Create function signature parser
-            ghidra.app.util.parser.FunctionSignatureParser parser = 
+            ghidra.app.util.parser.FunctionSignatureParser parser =
                 new ghidra.app.util.parser.FunctionSignatureParser(dtm, dtms);
 
             // Parse the prototype into a function signature
@@ -1074,7 +1081,7 @@ public class GhidraMCPPlugin extends Plugin {
             }
 
             // Create and apply the command
-            ghidra.app.cmd.function.ApplyFunctionSignatureCmd cmd = 
+            ghidra.app.cmd.function.ApplyFunctionSignatureCmd cmd =
                 new ghidra.app.cmd.function.ApplyFunctionSignatureCmd(
                     addr, sig, SourceType.USER_DEFINED);
 
@@ -1105,7 +1112,7 @@ public class GhidraMCPPlugin extends Plugin {
         // Input validation
         Program program = getCurrentProgram();
         if (program == null) return false;
-        if (functionAddrStr == null || functionAddrStr.isEmpty() || 
+        if (functionAddrStr == null || functionAddrStr.isEmpty() ||
             variableName == null || variableName.isEmpty() ||
             newType == null || newType.isEmpty()) {
             return false;
@@ -1114,7 +1121,7 @@ public class GhidraMCPPlugin extends Plugin {
         AtomicBoolean success = new AtomicBoolean(false);
 
         try {
-            SwingUtilities.invokeAndWait(() -> 
+            SwingUtilities.invokeAndWait(() ->
                 applyVariableType(program, functionAddrStr, variableName, newType, success));
         } catch (InterruptedException | InvocationTargetException e) {
             Msg.error(this, "Failed to execute set variable type on Swing thread", e);
@@ -1126,7 +1133,7 @@ public class GhidraMCPPlugin extends Plugin {
     /**
      * Helper method that performs the actual variable type change
      */
-    private void applyVariableType(Program program, String functionAddrStr, 
+    private void applyVariableType(Program program, String functionAddrStr,
                                   String variableName, String newType, AtomicBoolean success) {
         try {
             // Find the function
@@ -1163,7 +1170,7 @@ public class GhidraMCPPlugin extends Plugin {
                 return;
             }
 
-            Msg.info(this, "Found high variable for: " + variableName + 
+            Msg.info(this, "Found high variable for: " + variableName +
                      " with current type " + highVar.getDataType().getName());
 
             // Find the data type
@@ -1253,21 +1260,21 @@ public class GhidraMCPPlugin extends Plugin {
         try {
             Address addr = program.getAddressFactory().getAddress(addressStr);
             ReferenceManager refManager = program.getReferenceManager();
-            
+
             ReferenceIterator refIter = refManager.getReferencesTo(addr);
-            
+
             List<String> refs = new ArrayList<>();
             while (refIter.hasNext()) {
                 Reference ref = refIter.next();
                 Address fromAddr = ref.getFromAddress();
                 RefType refType = ref.getReferenceType();
-                
+
                 Function fromFunc = program.getFunctionManager().getFunctionContaining(fromAddr);
                 String funcInfo = (fromFunc != null) ? " in " + fromFunc.getName() : "";
-                
+
                 refs.add(String.format("From %s%s [%s]", fromAddr, funcInfo, refType.getName()));
             }
-            
+
             return paginateList(refs, offset, limit);
         } catch (Exception e) {
             return "Error getting references to address: " + e.getMessage();
@@ -1285,14 +1292,14 @@ public class GhidraMCPPlugin extends Plugin {
         try {
             Address addr = program.getAddressFactory().getAddress(addressStr);
             ReferenceManager refManager = program.getReferenceManager();
-            
+
             Reference[] references = refManager.getReferencesFrom(addr);
-            
+
             List<String> refs = new ArrayList<>();
             for (Reference ref : references) {
                 Address toAddr = ref.getToAddress();
                 RefType refType = ref.getReferenceType();
-                
+
                 String targetInfo = "";
                 Function toFunc = program.getFunctionManager().getFunctionAt(toAddr);
                 if (toFunc != null) {
@@ -1303,10 +1310,10 @@ public class GhidraMCPPlugin extends Plugin {
                         targetInfo = " to data " + (data.getLabel() != null ? data.getLabel() : data.getPathName());
                     }
                 }
-                
+
                 refs.add(String.format("To %s%s [%s]", toAddr, targetInfo, refType.getName()));
             }
-            
+
             return paginateList(refs, offset, limit);
         } catch (Exception e) {
             return "Error getting references from address: " + e.getMessage();
@@ -1328,27 +1335,59 @@ public class GhidraMCPPlugin extends Plugin {
                 if (function.getName().equals(functionName)) {
                     Address entryPoint = function.getEntryPoint();
                     ReferenceIterator refIter = program.getReferenceManager().getReferencesTo(entryPoint);
-                    
+
                     while (refIter.hasNext()) {
                         Reference ref = refIter.next();
                         Address fromAddr = ref.getFromAddress();
                         RefType refType = ref.getReferenceType();
-                        
+
                         Function fromFunc = funcManager.getFunctionContaining(fromAddr);
                         String funcInfo = (fromFunc != null) ? " in " + fromFunc.getName() : "";
-                        
+
                         refs.add(String.format("From %s%s [%s]", fromAddr, funcInfo, refType.getName()));
                     }
                 }
             }
-            
+
             if (refs.isEmpty()) {
                 return "No references found to function: " + functionName;
             }
-            
+
             return paginateList(refs, offset, limit);
         } catch (Exception e) {
             return "Error getting function references: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Read raw memory from a specific address with a given length
+     */
+    private String readMemory(String addressStr, int length) {
+        Program program = getCurrentProgram();
+        if (program == null) return "No program loaded";
+        if (addressStr == null || addressStr.isEmpty()) return "Address is required";
+        if (length <= 0) return "Length must be greater than 0";
+
+        try {
+            // program.getMemory().getByte(stringAddr);
+            Address addr = program.getAddressFactory().getAddress(addressStr);
+
+            StringBuilder sb = new StringBuilder();
+
+            for(long i = 0; i < length; i++) {
+                Address currentAddr = addr.add(i);
+                if (!program.getMemory().contains(currentAddr)) {
+                    sb.append(String.format("Address %s is out of bounds\n", currentAddr));
+                    continue;
+                }
+
+                byte b = program.getMemory().getByte(currentAddr);
+                sb.append(String.format("0x%02x\n", b));
+            }
+
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "Error reading memory: " + e.getMessage();
         }
     }
 
@@ -1361,20 +1400,20 @@ public class GhidraMCPPlugin extends Plugin {
 
         List<String> lines = new ArrayList<>();
         DataIterator dataIt = program.getListing().getDefinedData(true);
-        
+
         while (dataIt.hasNext()) {
             Data data = dataIt.next();
-            
+
             if (data != null && isStringData(data)) {
                 String value = data.getValue() != null ? data.getValue().toString() : "";
-                
+
                 if (filter == null || value.toLowerCase().contains(filter.toLowerCase())) {
                     String escapedValue = escapeString(value);
                     lines.add(String.format("%s: \"%s\"", data.getAddress(), escapedValue));
                 }
             }
         }
-        
+
         return paginateList(lines, offset, limit);
     }
 
@@ -1383,7 +1422,7 @@ public class GhidraMCPPlugin extends Plugin {
      */
     private boolean isStringData(Data data) {
         if (data == null) return false;
-        
+
         DataType dt = data.getDataType();
         String typeName = dt.getName().toLowerCase();
         return typeName.contains("string") || typeName.contains("char") || typeName.equals("unicode");
@@ -1394,7 +1433,7 @@ public class GhidraMCPPlugin extends Plugin {
      */
     private String escapeString(String input) {
         if (input == null) return "";
-        
+
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
@@ -1491,7 +1530,7 @@ public class GhidraMCPPlugin extends Plugin {
                 return dtm.getDataType("/int");
         }
     }
-    
+
     /**
      * Find a data type by name in all categories/folders of the data type manager
      * This searches through all categories rather than just the root
@@ -1515,7 +1554,7 @@ public class GhidraMCPPlugin extends Plugin {
         Iterator<DataType> allTypes = dtm.getAllDataTypes();
         while (allTypes.hasNext()) {
             DataType dt = allTypes.next();
-            // Check if the name matches exactly (case-sensitive) 
+            // Check if the name matches exactly (case-sensitive)
             if (dt.getName().equals(name)) {
                 return dt;
             }
