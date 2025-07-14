@@ -70,7 +70,7 @@ public class GhidraMCPPlugin extends Plugin {
     private HttpServer server;
     private static final String OPTION_CATEGORY_NAME = "GhidraMCP HTTP Server";
     private static final String PORT_OPTION_NAME = "Server Port";
-    private static final int DEFAULT_PORT = 8080;
+    private static final int DEFAULT_PORT = 8090;
 
     public GhidraMCPPlugin(PluginTool tool) {
         super(tool);
@@ -197,6 +197,12 @@ public class GhidraMCPPlugin extends Plugin {
             Map<String, String> qparams = parseQueryParams(exchange);
             String address = qparams.get("address");
             sendResponse(exchange, getFunctionByAddress(address));
+        });
+
+        server.createContext("/get_function_containing_address", exchange -> {
+            Map<String, String> qparams = parseQueryParams(exchange);
+            String address = qparams.get("address");
+            sendResponse(exchange, getFunctionContainingAddress(address));
         });
 
         server.createContext("/get_current_address", exchange -> {
@@ -346,6 +352,10 @@ public class GhidraMCPPlugin extends Plugin {
             String address = qparams.get("address");
             int size = parseIntOrDefault(qparams.get("size"), 100);
             sendResponse(exchange, readMemory(address, size));
+        });
+
+        server.createContext("/program_info", exchange -> {
+            sendResponse(exchange, getProgramInfo());
         });
 
         server.setExecutor(null);
@@ -731,6 +741,26 @@ public class GhidraMCPPlugin extends Plugin {
                 func.getEntryPoint(),
                 func.getBody().getMinAddress(),
                 func.getBody().getMaxAddress());
+        } catch (Exception e) {
+            return "Error getting function: " + e.getMessage();
+        }
+    }
+
+    private String getFunctionContainingAddress(String AddressStr){
+        Program program = getCurrentProgram();
+        if (program == null) return "No program loaded";
+        if (AddressStr == null || AddressStr.isEmpty()) return "Address is required";
+
+        try {
+            Address addr = program.getAddressFactory().getAddress(AddressStr);
+            Function func = program.getFunctionManager().getFunctionContaining(addr);
+            if (func == null) {
+                return "No function found at address " + AddressStr;
+            }
+            return String.format("Function: %s at %s\nSignature: %s",
+                func.getName(),
+                func.getEntryPoint(),
+                func.getSignature());
         } catch (Exception e) {
             return "Error getting function: " + e.getMessage();
         }
@@ -1386,6 +1416,24 @@ public class GhidraMCPPlugin extends Plugin {
             }
 
             return sb.toString().trim();
+        } catch (Exception e) {
+            return "Error reading memory: " + e.getMessage();
+        }
+    }
+
+    private String getProgramInfo(){
+        Program program = getCurrentProgram();
+        if (program == null) {
+            return "No program loaded!";
+        }
+
+        try{
+            StringBuilder info = new StringBuilder();
+            info.append("Program Info: ").append(program.PROGRAM_INFO).append("-");
+            info.append("Program ID: ").append(program.getDomainFile().getFileID()).append("-");
+            info.append("Language: ").append(program.getLanguageID()).append("-");
+            info.append("Compiler: ").append(program.getCompilerSpec().getCompilerSpecDescription()).append("-");
+            return info.toString().trim();
         } catch (Exception e) {
             return "Error reading memory: " + e.getMessage();
         }
